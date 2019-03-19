@@ -1,44 +1,49 @@
 # -*- coding:utf-8 -*-
 
-import urllib2
+from urllib import request
+from bs4 import BeautifulSoup
 import re
+import os
 
-def find_number(str):
-    '''
-    获取每一行中的数量范围
-    '''
-    res = r'<td width="40%" align="right">(.*?)</td>'
-    find_str = re.findall(res, str, re.S)[0]
-    # 去除单位
-    res_2 = '[1-9]{1}[\\d ~\\s]*\\d'
-    find_str = re.findall(res_2, find_str, re.S)[0]
-    # 去除字符串中的空格
-    strinfo = re.compile('[\\s]')
-    return re.sub(strinfo, '', find_str)
-
-def find_price(str):
-    '''
-    获取每一行中的价格信息
-    '''
-    res = r"<p class='goldenrod'>(.*?)</p>"
-    find_str = re.findall(res, str, re.S)
-    # 若无对应的价格是显示 None
-    if len(find_str):
-        # 去除价格中的单位
-        res_2 = '[1-9]{1}[\\d\\.]*'
-        find_str = re.findall(res_2, find_str[0], re.S)
-        return find_str[0]
-    else:
+def get_number(tag):
+    number_tag = tag.find('td', align='right')
+    if number_tag is None:
         return 'None'
+    else:
+        price = re.search('[1-9]{1}[\\d ~\\s]*\\d',
+                            next(number_tag.stripped_strings),
+                            re.S).group()
+        strinfo = re.compile('[\\s]')
+        return re.sub(strinfo, '', price)
+
+def get_price(tag):
+    price_tag = tag.find('p', class_='goldenrod')
+    if price_tag is None:
+        return 'None'
+    else:
+        price = [price for price in price_tag.stripped_strings]
+        return re.search('[1-9]{1}[\\d\\.]*', price[0], re.S).group()
+
+def find_price_group(html):
+    soup = BeautifulSoup(html, features='lxml')
+    return soup.find_all('tr', class_='sample_list_tr')
 
 url = 'https://item.szlcsc.com/8796.html'
-# 读取网页内容，并解码相关内容
-response = urllib2.urlopen(url)
-html_text = response.read().decode('utf-8')
-res_tr = r'<tr class="sample_list_tr">(.*?)</tr>'
-m_tr = re.findall(res_tr, html_text, re.S)
-print '%4s |   %10s |  %5s' %('序号', '数量', '单价')
-print "-------------------------"
-for n, value in enumerate(m_tr):
-    print '%4d | %10s | %5s' %(n + 1, find_number(value), find_price(value))
-    print "-------------------------"
+try:
+    response = request.urlopen(url, timeout=5)
+except BaseException as e:
+    print(e)
+    os._exit()
+
+html = response.read()
+
+price_group = find_price_group(html=html)
+print ('%3s|    %5s | %3s' %('序号', '数量', '单价'))
+print ("-------------------------")
+serial = 0
+for group in price_group:
+    if group is None:
+        continue
+    serial = serial + 1
+    print ('%4d | %10s | %5s' %(serial, get_number(group), get_price(group)))
+    print ("-------------------------")
