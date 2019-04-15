@@ -10,7 +10,6 @@ def main():
     crawler = Crawler(10000)
     logger.info('run')
     crawler.run(url='https://www.szlcsc.com/')
-    # crawler.run(url='https://item.szlcsc.com/112678.html')
 
 
 if __name__ == '__main__':

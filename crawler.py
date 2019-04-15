@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 from queue import Queue
 import re
 import logging
+from save_data import SaveData
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,7 @@ class Crawler:
     def __init__(self, max_url_count = 1000):
         self.__max_url_count = max_url_count
         self.__url_queue = Queue()
+        self.save = SaveData()
 
     def __find_url(self, html):
         for link in html.find_all(name='a', href=re.compile(r'https?://list|item.szlcsc.+')):
@@ -34,14 +36,17 @@ class Crawler:
         strinfo = re.compile('[/]')
         filename = re.sub(strinfo, '-', filename)
         filename = './finally/' + filename
-        str = '%20s :' %(data[1])
-        for price in data[2]:
-            data = price[0].rjust(10) + ':' + price[1].ljust(10)
-            str = str + data
-        str = str + '\n'
-        logger.info(str)
-        with open(filename, 'a') as f:
-            f.write(str)
+        # str = '%20s :' %(data[1])
+        # for price in data[2]:
+        #     data = price[0].rjust(10) + ':' + price[1].ljust(10)
+        #     str = str + data
+        # str = str + '\n'
+        # logger.info(str)
+        # with open(filename, 'a') as f:
+        #     f.write(str)
+        logger.info(data[1])
+        logger.info(data[2])
+        self.save.save(data[1], data[2])
 
 
 
