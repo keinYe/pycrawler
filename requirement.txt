@@ -4,3 +4,4 @@ jdcal==1.4
 lxml==4.3.2
 openpyxl==2.6.1
 soupsieve==1.8
+bitarray>=0.8.3

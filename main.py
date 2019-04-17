@@ -7,7 +7,7 @@ logging.config.fileConfig('logging.conf')
 logger = logging.getLogger(__name__)
 
 def main():
-    crawler = Crawler(10000)
+    crawler = Crawler(1000)
     logger.info('run')
     crawler.run(url='https://www.szlcsc.com/')
 

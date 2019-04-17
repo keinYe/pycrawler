@@ -5,37 +5,37 @@ from bs4 import BeautifulSoup
 from queue import Queue
 import re
 import logging
+from bloomfilter import BloomFilter
 from save_data import SaveData
 
 logger = logging.getLogger(__name__)
 
 
 class Crawler:
-    __url_set = set()
-    __number_set = set()
 
     def __init__(self, max_url_count = 1000):
         self.__max_url_count = max_url_count
         self.__url_queue = Queue()
         self.save = SaveData()
+        self.bloomfilter = BloomFilter(capacity=max_url_count)
 
     def __find_url(self, html):
         for link in html.find_all(name='a', href=re.compile(r'https?://list|item.szlcsc.+')):
-            if len(self.__url_set) > self.__max_url_count:
+            if len(self.bloomfilter) > self.__max_url_count:
                 return
             url = link.get('href')
-            if url not in self.__url_set:
-                self.__url_set.add(url)
+            if url not in self.bloomfilter:
+                self.bloomfilter.add(url)
                 self.__url_queue.put(url)
 
     def __data_save(self, data):
         if len(data) < 2:
             logger.error('data length error : len = %d' %(len(data)))
             return
-        filename = data[0] + 'a.txt'
-        strinfo = re.compile('[/]')
-        filename = re.sub(strinfo, '-', filename)
-        filename = './finally/' + filename
+        # filename = data[0] + 'a.txt'
+        # strinfo = re.compile('[/]')
+        # filename = re.sub(strinfo, '-', filename)
+        # filename = './finally/' + filename
         # str = '%20s :' %(data[1])
         # for price in data[2]:
         #     data = price[0].rjust(10) + ':' + price[1].ljust(10)
@@ -106,7 +106,6 @@ class Crawler:
             number = self.__get_number(html)
             price = self.__get_price(html)
             price_list.append((number, price))
-            self.__number_set.add(number)
         return price_list
 
     def get_html(self, url):
@@ -142,4 +141,3 @@ class Crawler:
                 # for price in result[2]:
                 #     print (price)
                 self.__data_save(result)
-        print(self.__number_set)
