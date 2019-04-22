@@ -20,10 +20,8 @@ class SaveData:
         ws = wb.active
         list = []
         list.append(name.encode('utf-8'))
-        # print(data)
-        for n in data:
-            # print(n)
-            list.append(n[0].encode('utf-8'))
-            list.append(n[1].encode('utf-8'))
+        for key, value in data.items():
+            list.append(key.encode('utf-8'))
+            list.append(value.encode('utf-8'))
         ws.append(list)
         wb.save(self.__file_name__)

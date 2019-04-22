@@ -5,8 +5,8 @@ from bs4 import BeautifulSoup
 from queue import Queue
 import re
 import logging
-from bloomfilter import BloomFilter
-from save_data import SaveData
+from crawler.bloomfilter import ScalableBloomFilter
+from data.save_data import SaveData
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +17,11 @@ class Crawler:
         self.__max_url_count = max_url_count
         self.__url_queue = Queue()
         self.save = SaveData()
-        self.bloomfilter = BloomFilter(capacity=max_url_count)
+        self.bloomfilter = ScalableBloomFilter()
 
     def __find_url(self, html):
         for link in html.find_all(name='a', href=re.compile(r'https?://list|item.szlcsc.+')):
-            if len(self.bloomfilter) > self.__max_url_count:
+            if self.__url_queue.qsize() > self.__max_url_count:
                 return
             url = link.get('href')
             if url not in self.bloomfilter:
@@ -32,20 +32,6 @@ class Crawler:
         if len(data) < 2:
             logger.error('data length error : len = %d' %(len(data)))
             return
-        # filename = data[0] + 'a.txt'
-        # strinfo = re.compile('[/]')
-        # filename = re.sub(strinfo, '-', filename)
-        # filename = './finally/' + filename
-        # str = '%20s :' %(data[1])
-        # for price in data[2]:
-        #     data = price[0].rjust(10) + ':' + price[1].ljust(10)
-        #     str = str + data
-        # str = str + '\n'
-        # logger.info(str)
-        # with open(filename, 'a') as f:
-        #     f.write(str)
-        logger.info(data[1])
-        logger.info(data[2])
         self.save.save(data[1], data[2])
 
 
@@ -101,19 +87,19 @@ class Crawler:
         if re.match(r'https?://item.szlcsc.com/[0-9]+.html$', url) is None:
             return;
         soup = soup.find_all('tr', class_='sample_list_tr')
-        price_list = []
+        price_dict = {}
         for html in soup:
             number = self.__get_number(html)
             price = self.__get_price(html)
-            price_list.append((number, price))
-        return price_list
+            price_dict[number] = price
+        return price_dict
 
     def get_html(self, url):
         try:
             response = request.urlopen(url, timeout=10)
             html = response.read()
         except BaseException as e:
-            print(e)
+            logger.error(2)
             return ()
         soup = BeautifulSoup(html, features='lxml')
         self.__find_url(soup)
@@ -122,6 +108,7 @@ class Crawler:
         category = self.__get_category(soup=soup)
         name = self.__get_name(soup=soup)
         price = self.__get_group(url=url, soup=soup)
+        logger.info(price)
         return (category, name, price)
 
     def run(self, url=None):
@@ -134,10 +121,6 @@ class Crawler:
             count = count + 1
             url = self.__url_queue.get()
             result = self.get_html(url)
-            # logger.info('run : %d : %s',count, url)
             logger.info('url : %d, %s', count, url)
             if result is not None and len(result) > 1:
-                # print('category: %s - name: %s' %(result[0], result[1]))
-                # for price in result[2]:
-                #     print (price)
                 self.__data_save(result)
