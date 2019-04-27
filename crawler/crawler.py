@@ -19,20 +19,23 @@ class Crawler:
         self.save = SaveData()
         self.bloomfilter = ScalableBloomFilter()
 
-    def __find_url(self, html):
+    def __find_url(self, current_url, html):
         for link in html.find_all(name='a', href=re.compile(r'https?://list|item.szlcsc.+')):
-            if self.__url_queue.qsize() > self.__max_url_count:
-                return
             url = link.get('href')
             if url not in self.bloomfilter:
-                self.bloomfilter.add(url)
-                self.__url_queue.put(url)
+                if self.__url_queue.qsize() < self.__max_url_count:
+                    self.bloomfilter.add(url)
+                    self.__url_queue.put(url)
+                else:
+                    self.__url_queue.put(current_url)
+                    return
 
     def __data_save(self, data):
         if len(data) < 2:
             logger.error('data length error : len = %d' %(len(data)))
             return
-        self.save.save(data[1], data[2])
+        # self.save.save(data[1], data[2])
+        self.save.save_to_database(data)
 
 
 
@@ -94,6 +97,30 @@ class Crawler:
             price_dict[number] = price
         return price_dict
 
+    def __get_brand(self, url, soup):
+        brand_dict = {}
+        if re.match(r'https?://item.szlcsc.com/[0-9]+.html$', url) is None:
+            return brand_dict
+        soup = soup.find('div', class_='product_brand_con')
+        if soup is None:
+            return brand_dict
+        soup = soup.find_all('div', class_='item')
+        for item in soup:
+            str = []
+            for stri in item.stripped_strings:
+                str.append(stri)
+            # logger.info(str[0] + ':' + str[1])
+            if str[0] == '品　　牌：':
+                brand_dict['brand'] = str[1]
+            if str[0] == '厂家型号：':
+                brand_dict['model'] = str[1]
+            if str[0] == '商品编号：':
+                brand_dict['number'] = str[1]
+            if str[0] == '封装规格：':
+                brand_dict['package'] = str[1]
+        # logger.info(brand_dict)
+        return brand_dict
+
     def get_html(self, url):
         try:
             response = request.urlopen(url, timeout=10)
@@ -102,14 +129,16 @@ class Crawler:
             logger.error(2)
             return ()
         soup = BeautifulSoup(html, features='lxml')
-        self.__find_url(soup)
+        self.__find_url(url, soup)
         if re.match(r'https?://item.szlcsc.com/[0-9]+.html$', url) is None:
-            return ();
+            return {}
         category = self.__get_category(soup=soup)
         name = self.__get_name(soup=soup)
         price = self.__get_group(url=url, soup=soup)
-        logger.info(price)
-        return (category, name, price)
+        brand = self.__get_brand(url=url, soup=soup)
+        materials = {'category':category, 'name':name, 'price':price}
+        materials.update(brand)
+        return materials
 
     def run(self, url=None):
 
@@ -122,5 +151,7 @@ class Crawler:
             url = self.__url_queue.get()
             result = self.get_html(url)
             logger.info('url : %d, %s', count, url)
-            if result is not None and len(result) > 1:
+            if result:
                 self.__data_save(result)
+            # if result is not None and len(result) > 1:
+            #     self.__data_save(result)
