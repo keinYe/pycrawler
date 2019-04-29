@@ -13,12 +13,10 @@ logger = logging.getLogger(__name__)
 def main():
     with open('database.conf','r') as confFile:
         confStr = confFile.read()
-    logger.info(confStr)
     conf = json.JSONDecoder().decode(confStr)
     db.init_url(url=conf['mariadb_url'])
 
     crawler = Crawler(1000)
-    logger.info('run')
     # crawler.run(url='https://item.szlcsc.com/44085.html')
     crawler.run(url='https://www.szlcsc.com/')
 

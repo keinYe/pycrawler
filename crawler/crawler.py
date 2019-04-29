@@ -109,7 +109,8 @@ class Crawler:
             str = []
             for stri in item.stripped_strings:
                 str.append(stri)
-            # logger.info(str[0] + ':' + str[1])
+            if len(str) < 2:
+                continue
             if str[0] == '品　　牌：':
                 brand_dict['brand'] = str[1]
             if str[0] == '厂家型号：':

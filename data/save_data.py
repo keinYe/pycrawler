@@ -34,7 +34,6 @@ class SaveData:
 
     def save_to_database(self, materials):
         mater = db.session.query(Materials).filter_by(number=materials.get('number', 'None')).first()
-        logger.info(materials)
         if mater is not None:
             logger.info(mater)
             return
