@@ -65,7 +65,6 @@ class Crawler:
             else:
                 self.get_product_item_url(current_url)
             return
-        logger.info('test 3')
         for link in html.find_all(name='a', href=re.compile(r'https?://list|item.szlcsc.+')):
             url = link.get('href')
             if url not in self.bloomfilter:
@@ -175,7 +174,6 @@ class Crawler:
         except BaseException as e:
             logger.error(2)
             return ()
-        logger.info('test 1')
         soup = BeautifulSoup(html, features='lxml')
         self.__find_url(url, soup)
         if re.match(r'https?://item.szlcsc.com/[0-9]+.html$', url) is None:
