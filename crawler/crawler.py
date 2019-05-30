@@ -3,7 +3,7 @@
 from urllib import request
 from bs4 import BeautifulSoup
 from queue import Queue
-import re
+import re, urllib, json
 import logging
 from crawler.bloomfilter import ScalableBloomFilter
 from data.save_data import SaveData
@@ -19,16 +19,59 @@ class Crawler:
         self.save = SaveData()
         self.bloomfilter = ScalableBloomFilter()
 
+    def get_product_item_url(self, current_url):
+        product_post_url = 'https://list.szlcsc.com/products/list'
+        query = {
+            'catalogNodeId': '313',
+            'pageNumber': '325',
+            'querySortBySign': '0',
+            'showOutSockProduct': '1'
+        }
+
+        p1 = re.compile(r'[/]([0-9]*?)[.]', re.S)
+        category_id = re.findall(p1, current_url)
+        logger.info(category_id)
+        page = 0
+        query['catalogNodeId'] = category_id[0]
+        query['pageNumber'] = str(page)
+
+        while True:
+            query['pageNumber'] = str(page)
+            date = urllib.parse.urlencode(query).encode('utf-8')
+            try:
+                response = request.urlopen(url=product_post_url,data=date, timeout=10)
+                html = response.read()
+            except BaseException as e:
+                logger.error(2)
+                return
+            data = dict(json.loads(html.decode('utf-8')))
+            productRecordList = data.get('productRecordList')
+            if not productRecordList:
+                break
+            for product in productRecordList:
+                item_id = product.get('productId')
+                if item_id:
+                    item_url = 'https://item.szlcsc.com/' + item_id + '.html'
+                    if item_url not in self.bloomfilter:
+                        self.bloomfilter.add(item_url)
+                        self.__url_queue.put(item_url)
+            page = page + 1
+
+
     def __find_url(self, current_url, html):
+        if re.match(r'https://list.szlcsc.com/catalog/[0-9]+.html', current_url):
+            if self.__url_queue.qsize() > self.__max_url_count:
+                self.__url_queue.put(current_url)
+            else:
+                self.get_product_item_url(current_url)
+            return
+        logger.info('test 3')
         for link in html.find_all(name='a', href=re.compile(r'https?://list|item.szlcsc.+')):
             url = link.get('href')
             if url not in self.bloomfilter:
                 if self.__url_queue.qsize() < self.__max_url_count:
                     self.bloomfilter.add(url)
                     self.__url_queue.put(url)
-                else:
-                    self.__url_queue.put(current_url)
-                    return
 
     def __data_save(self, data):
         if len(data) < 2:
@@ -36,8 +79,6 @@ class Crawler:
             return
         # self.save.save(data[1], data[2])
         self.save.save_to_database(data)
-
-
 
     def __get_category(self, soup):
         soup_tag = soup.find('div', class_='bread_crumbs')
@@ -56,7 +97,7 @@ class Crawler:
             logger.error(soup)
             return 'None'
         else:
-            str = re.search('[1-9]{1}[\\d ~\\s]*\\d',
+            str = re.search('[1-9]{1}([\\d ~\\s]*\\d)|(\\+)',
                                 next(number_tag.stripped_strings),
                                 re.S)
             if str is None:
@@ -123,12 +164,18 @@ class Crawler:
         return brand_dict
 
     def get_html(self, url):
+        if (re.match(r'https://www.szlcsc.com/catalog.html', url) is None and
+            re.match(r'https?://item.szlcsc.com/[0-9]+.html$', url) is None and
+            re.match(r'https://list.szlcsc.com/catalog/[0-9]+.html', url) is None):
+            return {}
+
         try:
             response = request.urlopen(url, timeout=10)
             html = response.read()
         except BaseException as e:
             logger.error(2)
             return ()
+        logger.info('test 1')
         soup = BeautifulSoup(html, features='lxml')
         self.__find_url(url, soup)
         if re.match(r'https?://item.szlcsc.com/[0-9]+.html$', url) is None:
@@ -142,7 +189,6 @@ class Crawler:
         return materials
 
     def run(self, url=None):
-
         if url is None:
             return
         self.__url_queue.put(url)

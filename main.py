@@ -18,7 +18,7 @@ def main():
 
     crawler = Crawler(1000)
     # crawler.run(url='https://item.szlcsc.com/44085.html')
-    crawler.run(url='https://www.szlcsc.com/')
+    crawler.run(url='https://www.szlcsc.com/catalog.html')
 
 
 if __name__ == '__main__':
