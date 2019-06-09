@@ -19,6 +19,17 @@ class Crawler:
         self.save = SaveData()
         self.bloomfilter = ScalableBloomFilter()
 
+    def read_url(self, url, data):
+        try:
+            response = request.urlopen(url=url, data=data, timeout=100)
+            html = response.read()
+        except BaseException as e:
+            logger.info(str(page) + ' : ' + str(self.__url_queue.qsize()))
+            logger.error("Error: {0}".format(e))
+            return None
+        else:
+            return html
+
     def get_product_item_url(self, current_url):
         product_post_url = 'https://list.szlcsc.com/products/list'
         query = {
@@ -38,12 +49,16 @@ class Crawler:
         while True:
             query['pageNumber'] = str(page)
             date = urllib.parse.urlencode(query).encode('utf-8')
-            try:
-                response = request.urlopen(url=product_post_url,data=date, timeout=10)
-                html = response.read()
-            except BaseException as e:
-                logger.error(2)
-                return
+            html = self.read_url(product_post_url, date)
+            while html is None:
+                html = self.read_url(product_post_url, date)
+            # try:
+            #     response = request.urlopen(url=product_post_url,data=date, timeout=100)
+            #     html = response.read()
+            # except BaseException as e:
+            #     logger.info(str(page) + ' : ' + str(self.__url_queue.qsize()))
+            #     logger.error("Error: {0}".format(e))
+            #     return
             data = dict(json.loads(html.decode('utf-8')))
             productRecordList = data.get('productRecordList')
             if not productRecordList:
@@ -56,6 +71,7 @@ class Crawler:
                         self.bloomfilter.add(item_url)
                         self.__url_queue.put(item_url)
             page = page + 1
+        logger.info(str(page) + ' : ' + str(self.__url_queue.qsize()))
 
 
     def __find_url(self, current_url, html):
@@ -172,7 +188,7 @@ class Crawler:
             response = request.urlopen(url, timeout=10)
             html = response.read()
         except BaseException as e:
-            logger.error(2)
+            logger.error("Error: {0}".format(e))
             return ()
         soup = BeautifulSoup(html, features='lxml')
         self.__find_url(url, soup)
