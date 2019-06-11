@@ -24,7 +24,7 @@ class Crawler:
             response = request.urlopen(url=url, data=data, timeout=100)
             html = response.read()
         except BaseException as e:
-            logger.info(str(page) + ' : ' + str(self.__url_queue.qsize()))
+            logger.info(str(self.__url_queue.qsize()))
             logger.error("Error: {0}".format(e))
             return None
         else:
