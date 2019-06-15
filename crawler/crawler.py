@@ -7,24 +7,41 @@ import re, urllib, json
 import logging
 from crawler.bloomfilter import ScalableBloomFilter
 from data.save_data import SaveData
+import threading
 
 logger = logging.getLogger(__name__)
 
 
 class Crawler:
+    url_queue = Queue()
+    bloomfilter = ScalableBloomFilter()
+    save = SaveData()
+    max_url_count = 1000
+    lock = threading.Lock()
 
-    def __init__(self, max_url_count = 1000):
-        self.__max_url_count = max_url_count
-        self.__url_queue = Queue()
-        self.save = SaveData()
-        self.bloomfilter = ScalableBloomFilter()
+    def __init__(self, url_count = 1000, url = None):
+        if (Crawler.max_url_count < url_count):
+            Crawler.max_url_count = url_count
+
+        Crawler.url_queue.put(url)
+
+
+    def url_in_bloomfilter(self, url):
+        if url in Crawler.bloomfilter:
+            return True
+        return False
+    def url_add_bloomfilter(self, url):
+        Crawler.lock.acquire()
+        Crawler.bloomfilter.add(url)
+        Crawler.lock.release()
+
 
     def read_url(self, url, data):
         try:
             response = request.urlopen(url=url, data=data, timeout=100)
             html = response.read()
         except BaseException as e:
-            logger.info(str(self.__url_queue.qsize()))
+            logger.info(str(Crawler.url_queue.qsize()))
             logger.error("Error: {0}".format(e))
             return None
         else:
@@ -67,33 +84,35 @@ class Crawler:
                 item_id = product.get('productId')
                 if item_id:
                     item_url = 'https://item.szlcsc.com/' + item_id + '.html'
-                    if item_url not in self.bloomfilter:
-                        self.bloomfilter.add(item_url)
-                        self.__url_queue.put(item_url)
+                    if not self.url_in_bloomfilter(item_url):
+                        self.url_add_bloomfilter(item_url)
+                        Crawler.url_queue.put(item_url)
             page = page + 1
-        logger.info(str(page) + ' : ' + str(self.__url_queue.qsize()))
+        logger.info(str(page) + ' : ' + str(Crawler.url_queue.qsize()))
 
 
     def __find_url(self, current_url, html):
         if re.match(r'https://list.szlcsc.com/catalog/[0-9]+.html', current_url):
-            if self.__url_queue.qsize() > self.__max_url_count:
-                self.__url_queue.put(current_url)
+            if Crawler.url_queue.qsize() > Crawler.max_url_count:
+                Crawler.url_queue.put(current_url)
             else:
                 self.get_product_item_url(current_url)
             return
         for link in html.find_all(name='a', href=re.compile(r'https?://list|item.szlcsc.+')):
             url = link.get('href')
-            if url not in self.bloomfilter:
-                if self.__url_queue.qsize() < self.__max_url_count:
-                    self.bloomfilter.add(url)
-                    self.__url_queue.put(url)
+            if not self.url_in_bloomfilter(url):
+                if Crawler.url_queue.qsize() < Crawler.max_url_count:
+                    self.url_add_bloomfilter(url)
+                    Crawler.url_queue.put(url)
 
     def __data_save(self, data):
         if len(data) < 2:
             logger.error('data length error : len = %d' %(len(data)))
             return
         # self.save.save(data[1], data[2])
-        self.save.save_to_database(data)
+        Crawler.lock.acquire()
+        Crawler.save.save_to_database(data)
+        Crawler.lock.release()
 
     def __get_category(self, soup):
         soup_tag = soup.find('div', class_='bread_crumbs')
@@ -202,16 +221,11 @@ class Crawler:
         materials.update(brand)
         return materials
 
-    def run(self, url=None):
-        if url is None:
-            return
-        self.__url_queue.put(url)
-        count = 0
-        while not self.__url_queue.empty():
-            count = count + 1
-            url = self.__url_queue.get()
+    def run(self):
+        while not Crawler.url_queue.empty():
+            url = Crawler.url_queue.get()
             result = self.get_html(url)
-            logger.info('url : %d, %s', count, url)
+            logger.info('url : %s', url)
             if result:
                 self.__data_save(result)
             # if result is not None and len(result) > 1:
