@@ -225,7 +225,7 @@ class Crawler:
         while not Crawler.url_queue.empty():
             url = Crawler.url_queue.get()
             result = self.get_html(url)
-            logger.info('url : %s', url)
+            logger.info('%s - url : %s', threading.current_thread().name, url)
             if result:
                 self.__data_save(result)
             # if result is not None and len(result) > 1:
