@@ -19,7 +19,7 @@ class DataBase(object):
     def init_url(self, url):
         self.engine = create_engine(
             url,
-            pool_size=100,
+            pool_size=10,
             pool_recycle=5,
             pool_timeout=30,
             pool_pre_ping=True,

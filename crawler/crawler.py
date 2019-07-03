@@ -11,8 +11,16 @@ import threading
 
 logger = logging.getLogger(__name__)
 
+REGEX_EXP_ALL = r'https?://(www|list|item).szlcsc.com(/(catalog|brand))?(/[0-9]*)?.html'
+REGEX_EXP_BRAND_ALL = r'https://www.szlcsc.com/brand.html'
+REGEX_EXP_BRAND_LIST = r'https://list.szlcsc.com/brand/[0-9]+.html'
+REGEX_EXP_CATLOG_ALL = r'https://www.szlcsc.com/catalog.html'
+REGEX_EXP_CATLOG_LIST = r'https://list.szlcsc.com/catalog/[0-9]+.html'
+REGEX_EXP_CATLOG_ITEM = r'https://item.szlcsc.com/[0-9]+.html'
 
 class Crawler:
+
+
     url_queue = Queue()
     bloomfilter = ScalableBloomFilter()
     save = SaveData()
@@ -35,6 +43,14 @@ class Crawler:
         Crawler.bloomfilter.add(url)
         Crawler.lock.release()
 
+    def check_url(self, regex, url):
+        if regex is None or url is None:
+            return False
+        if re.match(regex, url) is None:
+            return False
+        return True
+
+
 
     def read_url(self, url, data):
         try:
@@ -48,6 +64,9 @@ class Crawler:
             return html
 
     def get_product_item_url(self, current_url):
+        # {queryProductGradePlateId: pageNumber:}
+        # url: https://list.szlcsc.com/brand_page/11842.html
+
         product_post_url = 'https://list.szlcsc.com/products/list'
         query = {
             'catalogNodeId': '313',
@@ -69,13 +88,7 @@ class Crawler:
             html = self.read_url(product_post_url, date)
             while html is None:
                 html = self.read_url(product_post_url, date)
-            # try:
-            #     response = request.urlopen(url=product_post_url,data=date, timeout=100)
-            #     html = response.read()
-            # except BaseException as e:
-            #     logger.info(str(page) + ' : ' + str(self.__url_queue.qsize()))
-            #     logger.error("Error: {0}".format(e))
-            #     return
+
             data = dict(json.loads(html.decode('utf-8')))
             productRecordList = data.get('productRecordList')
             if not productRecordList:
@@ -92,18 +105,26 @@ class Crawler:
 
 
     def __find_url(self, current_url, html):
-        if re.match(r'https://list.szlcsc.com/catalog/[0-9]+.html', current_url):
-            if Crawler.url_queue.qsize() > Crawler.max_url_count:
-                Crawler.url_queue.put(current_url)
-            else:
-                self.get_product_item_url(current_url)
-            return
-        for link in html.find_all(name='a', href=re.compile(r'https?://list|item.szlcsc.+')):
+        for link in html.find_all(name='a', href=re.compile(REGEX_EXP_BRAND_LIST)):
             url = link.get('href')
             if not self.url_in_bloomfilter(url):
                 if Crawler.url_queue.qsize() < Crawler.max_url_count:
                     self.url_add_bloomfilter(url)
                     Crawler.url_queue.put(url)
+
+        if self.check_url(REGEX_EXP_CATLOG_LIST, current_url):
+            if Crawler.url_queue.qsize() > Crawler.max_url_count:
+                Crawler.url_queue.put(current_url)
+            else:
+                self.get_product_item_url(current_url)
+
+        for link in html.find_all(name='a', href=re.compile(REGEX_EXP_ALL)):
+            url = link.get('href')
+            if not self.url_in_bloomfilter(url):
+                if Crawler.url_queue.qsize() < Crawler.max_url_count:
+                    self.url_add_bloomfilter(url)
+                    Crawler.url_queue.put(url)
+
 
     def __data_save(self, data):
         if len(data) < 2:
@@ -111,8 +132,35 @@ class Crawler:
             return
         # self.save.save(data[1], data[2])
         Crawler.lock.acquire()
-        Crawler.save.save_to_database(data)
+        Crawler.save.save_material_to_database(data)
         Crawler.lock.release()
+
+    def __brand_save(self, brand):
+        if len(brand) < 1:
+            logger.error('data length error : len = %d' %(len(data)))
+            return
+        Crawler.lock.acquire()
+        Crawler.save.save_brand_to_database(brand)
+        Crawler.lock.release()
+
+    def analysis_brand_page(self, soup):
+        soup_tag = soup.find('div', class_='brand-info')
+        brand = {}
+        if soup_tag is None:
+            logger.error(soup)
+            return
+        name_tag = soup_tag.find('h1', class_='brand-info-name')
+        if name_tag and name_tag.string:
+            brand['name'] = name_tag.string
+        url_tag = soup_tag.find('a', class_='blue')
+        if url_tag and url_tag.string:
+            brand['url'] = url_tag.string
+        desc_tag = soup_tag.find('div', class_='introduce_txt')
+        if desc_tag and desc_tag.string:
+            brand['desc'] = desc_tag.string
+        if brand.get('name'):
+            self.__brand_save(brand)
+
 
     def __get_category(self, soup):
         soup_tag = soup.find('div', class_='bread_crumbs')
@@ -187,7 +235,7 @@ class Crawler:
             if len(str) < 2:
                 continue
             if str[0] == '品　　牌：':
-                brand_dict['brand'] = str[1]
+                brand_dict['brand'] = str[1].rstrip('.')
             if str[0] == '厂家型号：':
                 brand_dict['model'] = str[1]
             if str[0] == '商品编号：':
@@ -198,9 +246,7 @@ class Crawler:
         return brand_dict
 
     def get_html(self, url):
-        if (re.match(r'https://www.szlcsc.com/catalog.html', url) is None and
-            re.match(r'https?://item.szlcsc.com/[0-9]+.html$', url) is None and
-            re.match(r'https://list.szlcsc.com/catalog/[0-9]+.html', url) is None):
+        if self.check_url(REGEX_EXP_ALL, url) is False:
             return {}
 
         try:
@@ -211,22 +257,25 @@ class Crawler:
             return ()
         soup = BeautifulSoup(html, features='lxml')
         self.__find_url(url, soup)
-        if re.match(r'https?://item.szlcsc.com/[0-9]+.html$', url) is None:
-            return {}
-        category = self.__get_category(soup=soup)
-        name = self.__get_name(soup=soup)
-        price = self.__get_group(url=url, soup=soup)
-        brand = self.__get_brand(url=url, soup=soup)
-        materials = {'category':category, 'name':name, 'price':price}
-        materials.update(brand)
-        return materials
+
+        if self.check_url(REGEX_EXP_BRAND_LIST, url):
+            self.analysis_brand_page(soup=soup)
+
+        if self.check_url(REGEX_EXP_CATLOG_ITEM, url):
+            category = self.__get_category(soup=soup)
+            name = self.__get_name(soup=soup)
+            price = self.__get_group(url=url, soup=soup)
+            brand = self.__get_brand(url=url, soup=soup)
+            materials = {'category':category, 'name':name, 'price':price}
+            materials.update(brand)
+            self.__data_save(materials)
+
 
     def run(self):
         while not Crawler.url_queue.empty():
             url = Crawler.url_queue.get()
-            result = self.get_html(url)
             logger.info('%s - url : %s', threading.current_thread().name, url)
-            if result:
-                self.__data_save(result)
+            self.get_html(url)
+
             # if result is not None and len(result) > 1:
             #     self.__data_save(result)

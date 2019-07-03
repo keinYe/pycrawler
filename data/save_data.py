@@ -6,7 +6,7 @@ from openpyxl import (
 )
 import logging
 import os
-from data.models import Materials, Price
+from data.models import Materials, Price, Brands
 from data.database import db
 import json
 
@@ -32,19 +32,36 @@ class SaveData:
         ws.append(list)
         wb.save(self.__file_name__)
 
-    def save_to_database(self, materials):
+    def save_brand_to_database(self, brand):
+        tmp = db.session.query(Brands).filter_by(name=brand.get('name', 'None')).first()
+        if tmp is not None:
+            logger.error(tmp)
+            return
+        brands = Brands(
+            name=brand.get('name', 'None'),
+            url=brand.get('url', 'None'),
+            desc=brand.get('desc', 'None')
+        )
+        brands.save()
+
+    def save_material_to_database(self, materials):
         mater = db.session.query(Materials).filter_by(number=materials.get('number', 'None')).first()
         if mater is not None:
-            logger.info(mater)
+            logger.error(mater)
+            return
+        brand_name = materials.get('brand', 'None')
+        brand = db.session.query(Brands).filter(Brands.name.like('%' + brand_name + '%')).first()
+        if brand is None:
+            logger.error(brand_name + " don't exist!" )
             return
         material = Materials(
             name=materials.get('name', 'None'),
             category=materials.get('category', 'None'),
-            brand=materials.get('brand', 'None'),
             model=materials.get('model', 'None'),
             number=materials.get('number', 'None'),
             package=materials.get('package', 'None')
         )
         price = Price(price=json.dumps(materials.get('price', {'none':'none'})))
         material.price.append(price)
+        material.brands = brand
         material.save()
