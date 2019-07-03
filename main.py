@@ -17,8 +17,8 @@ def main():
     conf = json.JSONDecoder().decode(confStr)
     db.init_url(url=conf['mariadb_url'])
 
-    crawler1 = Crawler(1000, url='https://www.szlcsc.com/catalog.html')
-    crawler2 = Crawler(1000, url='https://www.szlcsc.com/catalog.html')
+    crawler1 = Crawler(1000, url='https://www.szlcsc.com/brand.html')
+    crawler2 = Crawler(1000, url='https://www.szlcsc.com/brand.html')
     # crawler.run(url='https://item.szlcsc.com/44085.html')
     # crawler.run(url='https://www.szlcsc.com/catalog.html')
     thread_one = threading.Thread(target=crawler1.run)
