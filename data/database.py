@@ -12,8 +12,6 @@ from sqlalchemy.orm import sessionmaker
 
 Base = declarative_base()
 
-
-
 class DataBase(object):
 
     def init_url(self, url):
@@ -27,7 +25,6 @@ class DataBase(object):
         self.db_session = sessionmaker(bind=self.engine)
         self.session = self.db_session()
         Base.metadata.create_all(self.engine)
-
 
 db = DataBase()
 
