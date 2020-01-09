@@ -8,22 +8,16 @@ from sqlalchemy import (
 )
 
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, scoped_session
 
 Base = declarative_base()
 
 class DataBase(object):
 
     def init_url(self, url):
-        self.engine = create_engine(
-            url,
-            pool_size=10,
-            pool_recycle=5,
-            pool_timeout=30,
-            pool_pre_ping=True,
-            max_overflow=0)
-        self.db_session = sessionmaker(bind=self.engine)
-        self.session = self.db_session()
+        self.engine = create_engine(url)
+        self.db_session = scoped_session(sessionmaker(bind=self.engine))
+        self.session = self.db_session
         Base.metadata.create_all(self.engine)
 
 db = DataBase()
