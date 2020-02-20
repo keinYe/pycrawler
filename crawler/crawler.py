@@ -147,7 +147,7 @@ class Crawler:
 
     def get_catalog_page(self, soup):
         Crawler.lock.acquire()
-        catalog_a = soup.find_all('div', class_='catalog_a')
+        catalog_a = soup.find_all('div', class_='catalog-a')
         for catalog in catalog_a:
             for tag in catalog.find_all('dl'):
                 catalog_dt = tag.find('dt')
@@ -187,9 +187,9 @@ class Crawler:
         url_tag = soup_tag.find('a', class_='blue')
         if url_tag and url_tag.string:
             brand['url'] = url_tag.string
-        desc_tag = soup_tag.find('div', class_='introduce_txt')
-        if desc_tag and desc_tag.string:
-            brand['desc'] = desc_tag.string
+        desc_tag = soup_tag.find('div', class_='introduce-txt')
+        if desc_tag and desc_tag.getText():
+            brand['desc'] = desc_tag.getText().strip()
         if brand.get('name'):
             self.__brand_save(brand)
 
