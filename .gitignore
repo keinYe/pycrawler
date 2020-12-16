@@ -104,4 +104,4 @@ venv.bak/
 .mypy_cache/
 finally/
 module_test/
-database.conf
+*.sqlite*

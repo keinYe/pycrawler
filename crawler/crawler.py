@@ -198,7 +198,7 @@ class Crawler:
             return {}
 
         try:
-            response = request.urlopen(url, timeout=10)
+            response = request.urlopen(url, timeout=200)
             html = response.read()
         except BaseException as e:
             logger.error("Error: {0}".format(e))
